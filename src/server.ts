@@ -1,9 +1,10 @@
-import Fastify from 'fastify';
 import fastifyCors from '@fastify/cors';
+import Fastify from 'fastify';
 import { Server as HttpServer } from 'http'; // Import HttpServer type explicitly
 import { config } from './config';
-import { initSocketIO } from './services/socketService';
 import { messageRoutes } from './routes';
+import { closeMqConnection, startMqConsumer } from './services/mqService'; // Import consumer start and close functions
+import { initSocketIO } from './services/socketService';
 
 // Initialize Fastify with logger enabled
 const fastify = Fastify({
@@ -25,8 +26,12 @@ initSocketIO(fastify.server as HttpServer);
 // Start the server
 const start = async () => {
   try {
-    await fastify.listen({ port: config.port, host: '0.0.0.0' }); // Listen on all available network interfaces
+    await fastify.listen({ port: 3000, host: '0.0.0.0' }); // Listen on all available network interfaces
     fastify.log.info(`Server listening on port ${config.port}`);
+
+    await startMqConsumer();
+    fastify.log.info('RabbitMQ consumer started.');
+
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -44,7 +49,8 @@ signals.forEach((signal) => {
         await fastify.close();
         // Socket.IO server closes automatically with the HTTP server
         fastify.log.info('Server closed gracefully.');
-        // Close RabbitMQ connection (handled in mqService.ts)
+        // Close RabbitMQ connection
+        await closeMqConnection(); // Use the exported close function
         process.exit(0);
     } catch (err) {
         fastify.log.error('Error during server shutdown:', err);

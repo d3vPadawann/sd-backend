@@ -48,9 +48,22 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
  * @param data - The data to send with the event.
  */
 export function emitMessage(eventName: string, data: any): void {
+  
+  let processedData = data;
+  
+  // Verifica se os dados são um Buffer e converte para objeto
+  if (Buffer.isBuffer(data)) {
+    try {
+      // Converte o Buffer para string e depois para objeto JSON
+      const dataString = data.toString('utf-8');
+      processedData = JSON.parse(dataString);
+    } catch (error) {
+      console.error("Erro ao converter buffer para objeto:", error);
+    }
+  }
+
   if (io) {
-    io.emit(eventName, data);
-    console.log(`Message emitted via Socket.IO - Event: ${eventName}, Data:`, data);
+    io.emit(eventName, processedData);
   } else {
     console.warn('Socket.IO server not initialized. Cannot emit message.');
   }

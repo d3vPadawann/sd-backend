@@ -1,9 +1,10 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { sendMessageToQueue } from '../services/mqService';
-import { emitMessage } from '../services/socketService';
 
 interface MessageRequestBody {
-  message: string;
+  content: string;
+  sender: string;
+  timestamp: string; // ou number, dependendo de como você pretende enviar o timestamp
 }
 
 /**
@@ -13,23 +14,25 @@ interface MessageRequestBody {
 export async function messageRoutes(fastify: FastifyInstance): Promise<void> {
 
   fastify.post('/message', async (request: FastifyRequest<{ Body: MessageRequestBody }>, reply: FastifyReply) => {
-    const { message } = request.body;
+    const { content, sender } = request.body;
+    const timestamp = request.body.timestamp || new Date().toISOString();; // Use null if timestamp is not provided
 
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
       reply.status(400).send({ error: 'Message content is required and must be a non-empty string.' });
       return;
     }
 
-    fastify.log.info(`Received message via POST: ${message}`);
+    if (!sender || typeof sender !== 'string' || sender.trim().length === 0) {
+      reply.status(400).send({ error: 'Sender name is required and must be a non-empty string.' });
+      return;
+    }
+    
+    fastify.log.info(`Received message from ${sender}: ${content}`);
 
     try {
-      // 1. Send message to RabbitMQ
-      await sendMessageToQueue(message);
-
-      // 2. Emit message via Socket.IO
-      // Ensure data structure is consistent if clients expect an object
-      emitMessage('receive_message', { text: message });
-
+      // 1. Send message to RabbitMQ with all fields
+      await sendMessageToQueue(JSON.stringify({ content, sender, timestamp }));
+  
       reply.status(200).send({ success: true, message: 'Message processed and emitted.' });
 
     } catch (error: any) {
